@@ -1,4 +1,4 @@
-import logo from "./logo.svg";
+// import logo from "./logo.svg";
 import "./App.css";
 import { useEffect, useState } from "react";
 
@@ -52,15 +52,20 @@ function App() {
   useEffect(() => {
     setLocation(localStorage.getItem("location") || "");
   }, []);
+
   //fetch weather data upon mount and location change
   useEffect(() => {
+    //clean up data fetching requests
+    const geoController = new AbortController();
+    const weatherController = new AbortController();
     async function getWeather() {
       try {
-        if (location.length < 2) return;
         // 1) Getting location (geocoding)
         setIsLoading(true);
+        setError("");
         const geoRes = await fetch(
-          `https://geocoding-api.open-meteo.com/v1/search?name=${location}`
+          `https://geocoding-api.open-meteo.com/v1/search?name=${location}`,
+          { signal: geoController.signal }
         );
         const geoData = await geoRes.json();
         console.log(geoData);
@@ -73,19 +78,35 @@ function App() {
 
         // 2) Getting actual weather
         const weatherRes = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&timezone=${timezone}&daily=weathercode,temperature_2m_max,temperature_2m_min`
+          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&timezone=${timezone}&daily=weathercode,temperature_2m_max,temperature_2m_min`,
+          { signal: weatherController.signal }
         );
+        console.log(weatherRes);
+        if (!weatherRes.ok) throw new Error("Could not fetch weather data");
         const weatherData = await weatherRes.json();
         setWeather(weatherData.daily);
       } catch (err) {
         console.error(err);
-        setError(err.message);
+        if (err.name !== "AbortError") {
+          setError(err.message);
+        }
       } finally {
         setIsLoading(false);
       }
     }
     getWeather();
+    setError("");
     localStorage.setItem("location", location);
+    if (location.length < 2) {
+      setError("");
+      setWeather({});
+      return;
+    }
+
+    return function () {
+      geoController.abort();
+      weatherController.abort();
+    };
   }, [location]);
 
   function onLocationChange(e) {
@@ -99,8 +120,9 @@ function App() {
     <div className="app">
       <h1>Weather App</h1>
       <Input location={location} onChangeLocation={onLocationChange} />
+      {error && <ErrorMessage error={error} />}
       {isLoading && <h3>Loading.....</h3>}
-      {weather.weathercode && (
+      {!error && !isLoading && weather.weathercode && (
         <Weather weather={weather} location={displayLocation} />
       )}
     </div>
@@ -118,6 +140,9 @@ const Input = ({ location, onChangeLocation }) => {
       onChange={onChangeLocation}
     />
   );
+};
+const ErrorMessage = ({ error }) => {
+  return <h3>{error}</h3>;
 };
 
 const Weather = ({ weather, location }) => {
