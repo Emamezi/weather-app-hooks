@@ -1,6 +1,7 @@
 // import logo from "./logo.svg";
 import "./App.css";
 import { useEffect, useState } from "react";
+import { useGeoLocation } from "./useGeoLocation";
 
 function getWeatherIcon(wmoCode) {
   const icons = new Map([
@@ -33,6 +34,7 @@ function formatDay(dateStr) {
     weekday: "short",
   }).format(new Date(dateStr));
 }
+
 function App() {
   const [location, setLocation] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -40,13 +42,9 @@ function App() {
   const [error, setError] = useState("");
   const [weather, setWeather] = useState({});
 
-  // useEffect(() => {
-  //   const nav = navigator.geolocation.getCurrentPosition(
-  //     () => {},
-  //     () => {}
-  //   );
-  //   console.log(nav);
-  // });
+  useEffect(() => {
+    // console.log(nav);
+  }, []);
 
   //retrieve location in database
   useEffect(() => {
@@ -68,7 +66,6 @@ function App() {
           { signal: geoController.signal }
         );
         const geoData = await geoRes.json();
-        console.log(geoData);
 
         if (!geoData.results) throw new Error("Location not found");
 
@@ -81,12 +78,13 @@ function App() {
           `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&timezone=${timezone}&daily=weathercode,temperature_2m_max,temperature_2m_min`,
           { signal: weatherController.signal }
         );
-        console.log(weatherRes);
+
         if (!weatherRes.ok) throw new Error("Could not fetch weather data");
         const weatherData = await weatherRes.json();
         setWeather(weatherData.daily);
+        console.log(weatherData.daily.weathercode);
       } catch (err) {
-        console.error(err);
+        console.log(err);
         if (err.name !== "AbortError") {
           setError(err.message);
         }
@@ -94,7 +92,6 @@ function App() {
         setIsLoading(false);
       }
     }
-    getWeather();
     setError("");
     localStorage.setItem("location", location);
     if (location.length < 2) {
@@ -102,6 +99,7 @@ function App() {
       setWeather({});
       return;
     }
+    getWeather();
 
     return function () {
       geoController.abort();
@@ -120,9 +118,9 @@ function App() {
     <div className="app">
       <h1>Weather App</h1>
       <Input location={location} onChangeLocation={onLocationChange} />
-      {error && <ErrorMessage error={error} />}
-      {isLoading && <h3>Loading.....</h3>}
-      {!error && !isLoading && weather.weathercode && (
+      {isLoading && !error && <Loader />}
+      {location && error && <ErrorMessage error={error} />}
+      {weather.weathercode && !error && !isLoading && (
         <Weather weather={weather} location={displayLocation} />
       )}
     </div>
@@ -130,6 +128,10 @@ function App() {
 }
 
 export default App;
+
+const Loader = () => {
+  return <h3 className="loader">Loading ....</h3>;
+};
 
 const Input = ({ location, onChangeLocation }) => {
   return (
@@ -152,6 +154,7 @@ const Weather = ({ weather, location }) => {
     time: dates,
     weathercode: code,
   } = weather;
+
   return (
     <div>
       <h2>{location}</h2>
@@ -180,5 +183,25 @@ const Day = ({ max, min, date, code, today }) => {
       </p>
       <p>{today === 0 ? "today" : formatDay(date)}</p>
     </li>
+  );
+};
+
+const LocalWeather = ({ setWeather, setLocation, setError }) => {
+  const {
+    isLoading: isLoadingGeo,
+    position,
+    error,
+    getPosition,
+  } = useGeoLocation();
+
+  useEffect(() => {}, []);
+
+  const { lat, long } = position;
+  return (
+    <div>
+      {isLoadingGeo && <Loader />}
+      {!error && <Weather weather={""} />}
+      Local Weather
+    </div>
   );
 };
